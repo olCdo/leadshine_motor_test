@@ -307,7 +307,8 @@ def _run_prepare_velocity_mode(config: AppConfig) -> int:
         print(f"error={exc}")
         return 2
 
-    print("result=ok")
+    print("result=ok" if result.display_matches else "result=warning")
+    print(f"mode_set={result.mode_set}")
     print(f"mode_display={result.mode_display}")
     print(f"status_word=0x{result.status_word.raw:04X}")
     print(f"state={result.status_word.state_label()}")

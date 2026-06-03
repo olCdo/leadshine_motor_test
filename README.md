@@ -119,7 +119,10 @@ PYTHONPATH=code python3 -m leadshine_motor_test --prepare-velocity-mode --interf
 
 ```text
 result=ok
+mode_set=3
 mode_display=3
 status_word=0x....
 state=...
 ```
+
+如果 `mode_set=3` 但 `mode_display` 不是 3，说明 `6060 operation mode` 已写入，但驱动器还没有在 `6061 operation mode display` 中报告生效；此时不要继续做运动测试。

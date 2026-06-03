@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
+from time import sleep
 
 from .pdo import configure_velocity_pdos, encode_rpdo1_control_velocity, rpm_to_pulse_per_second
-from .canopen import CanMessage, CanopenClient
+from .canopen import CanMessage, CanopenClient, NmtCommand
 
 
 class ControlWord(IntEnum):
@@ -88,10 +89,12 @@ class VelocityCommand:
 
 @dataclass(frozen=True)
 class VelocityModePreparation:
+    mode_set: int
     mode_display: int
     status_word: StatusWord
     acceleration_pulse_s2: int
     deceleration_pulse_s2: int
+    display_matches: bool
 
 
 def rpm_per_second_to_pulse_per_second2(rpm_per_second: float, pulses_per_rev: int) -> int:
@@ -117,13 +120,20 @@ def prepare_velocity_mode(
     client.sdo_write(0x6084, 0x00, deceleration, size=4)
     client.sdo_write(0x60FF, 0x00, 0, size=4, signed=True)
 
+    # NMT Operational is required by some drives before 6061 reflects 6060.
+    client.send_nmt(NmtCommand.START_REMOTE_NODE)
+    sleep(0.05)
+
+    mode_set = client.sdo_read(0x6060, 0x00, signed=True)
     mode_display = client.sdo_read(0x6061, 0x00, signed=True)
     status = StatusWord(client.sdo_read(0x6041, 0x00))
     return VelocityModePreparation(
+        mode_set=mode_set,
         mode_display=mode_display,
         status_word=status,
         acceleration_pulse_s2=acceleration,
         deceleration_pulse_s2=deceleration,
+        display_matches=mode_display == 3,
     )
 
 
