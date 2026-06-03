@@ -14,6 +14,14 @@ from .canopen import (
     encode_sdo_upload_request,
 )
 from .config import AppConfig
+from .pdo import (
+    RPDO1_CONTROL_WORD_TARGET_VELOCITY,
+    TPDO1_STATUS_WORD_ACTUAL_VELOCITY,
+    decode_tpdo1_status_velocity,
+    encode_rpdo1_control_velocity,
+    pulse_per_second_to_rpm,
+    rpm_to_pulse_per_second,
+)
 from .socketcan import SocketCanBus, SocketCanError
 
 
@@ -65,6 +73,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Open SocketCAN and read 6041 status word via SDO. Does not enable or move the motor.",
     )
+    parser.add_argument(
+        "--check-pdo-codecs",
+        action="store_true",
+        help="Run offline PDO mapping and payload codec checks and exit.",
+    )
     return parser
 
 
@@ -100,6 +113,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check_canopen_comm:
         return _run_canopen_comm_check(config)
+
+    if args.check_pdo_codecs:
+        _run_pdo_codec_check(config)
+        return 0
 
     parser.print_help()
     return 0
@@ -146,3 +163,29 @@ def _run_canopen_comm_check(config: AppConfig) -> int:
     print("result=ok")
     print(f"status_word=0x{status_word:04X}")
     return 0
+
+
+def _run_pdo_codec_check(config: AppConfig) -> None:
+    target_velocity = rpm_to_pulse_per_second(120, config.pulses_per_rev)
+    rpdo = encode_rpdo1_control_velocity(
+        node_id=config.node_id,
+        control_word=0x000F,
+        target_velocity_pulse_s=target_velocity,
+    )
+    decoded = decode_tpdo1_status_velocity(
+        CanMessage(
+            arbitration_id=0x180 + config.node_id,
+            data=bytes.fromhex("3701204e0000"),
+        ),
+        node_id=config.node_id,
+    )
+    actual_rpm = pulse_per_second_to_rpm(decoded.actual_velocity_pulse_s, config.pulses_per_rev)
+
+    print("test_type=offline")
+    print("motor_motion=no")
+    print("rpdo1_mapping=" + ",".join(f"0x{entry.to_mapping_value():08X}" for entry in RPDO1_CONTROL_WORD_TARGET_VELOCITY))
+    print("tpdo1_mapping=" + ",".join(f"0x{entry.to_mapping_value():08X}" for entry in TPDO1_STATUS_WORD_ACTUAL_VELOCITY))
+    print(f"rpdo1={rpdo.arbitration_id:03X}:{rpdo.data.hex()}")
+    print(f"decoded_status_word=0x{decoded.status_word:04X}")
+    print(f"decoded_actual_velocity_pulse_s={decoded.actual_velocity_pulse_s}")
+    print(f"decoded_actual_velocity_rpm={actual_rpm:.3f}")
