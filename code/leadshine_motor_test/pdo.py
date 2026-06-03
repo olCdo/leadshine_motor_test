@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from time import sleep
 
-from .canopen import CanMessage
+from .canopen import CanMessage, CanopenClient, NmtCommand
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,14 @@ class Tpdo1StatusVelocity:
     actual_velocity_pulse_s: int
 
 
+@dataclass(frozen=True)
+class PdoConfigurationResult:
+    rpdo1_cob_id: int
+    tpdo1_cob_id: int
+    rpdo1_mapping: tuple[int, ...]
+    tpdo1_mapping: tuple[int, ...]
+
+
 def rpm_to_pulse_per_second(rpm: float, pulses_per_rev: int) -> int:
     if pulses_per_rev <= 0:
         raise ValueError("pulses_per_rev must be positive")
@@ -76,6 +85,68 @@ def decode_tpdo1_status_velocity(message: CanMessage, node_id: int) -> Tpdo1Stat
     status_word = int.from_bytes(message.data[0:2], byteorder="little", signed=False)
     actual_velocity = int.from_bytes(message.data[2:6], byteorder="little", signed=True)
     return Tpdo1StatusVelocity(status_word=status_word, actual_velocity_pulse_s=actual_velocity)
+
+
+def configure_velocity_pdos(client: CanopenClient) -> PdoConfigurationResult:
+    """Temporarily configure RPDO1/TPDO1 for velocity-mode testing.
+
+    This writes volatile PDO communication and mapping objects only. It does not
+    write store-parameters objects and does not send control words.
+    """
+
+    node_id = client.node_id
+    _validate_node_id(node_id)
+    rpdo1_cob_id = RPDO1_COB_BASE + node_id
+    tpdo1_cob_id = TPDO1_COB_BASE + node_id
+    rpdo_mapping = tuple(entry.to_mapping_value() for entry in RPDO1_CONTROL_WORD_TARGET_VELOCITY)
+    tpdo_mapping = tuple(entry.to_mapping_value() for entry in TPDO1_STATUS_WORD_ACTUAL_VELOCITY)
+
+    client.send_nmt(NmtCommand.ENTER_PRE_OPERATIONAL)
+    sleep(0.05)
+
+    # Disable PDOs before changing mapping.
+    client.sdo_write(0x1400, 0x01, 0x80000000 | rpdo1_cob_id, size=4)
+    client.sdo_write(0x1800, 0x01, 0x80000000 | tpdo1_cob_id, size=4)
+
+    client.sdo_write(0x1600, 0x00, 0, size=1)
+    for subindex, mapping_value in enumerate(rpdo_mapping, start=1):
+        client.sdo_write(0x1600, subindex, mapping_value, size=4)
+    client.sdo_write(0x1600, 0x00, len(rpdo_mapping), size=1)
+
+    client.sdo_write(0x1A00, 0x00, 0, size=1)
+    for subindex, mapping_value in enumerate(tpdo_mapping, start=1):
+        client.sdo_write(0x1A00, subindex, mapping_value, size=4)
+    client.sdo_write(0x1A00, 0x00, len(tpdo_mapping), size=1)
+
+    # Asynchronous PDO type. Later motion/monitoring steps can tune timers.
+    client.sdo_write(0x1400, 0x02, 255, size=1)
+    client.sdo_write(0x1800, 0x02, 255, size=1)
+
+    client.sdo_write(0x1400, 0x01, rpdo1_cob_id, size=4)
+    client.sdo_write(0x1800, 0x01, tpdo1_cob_id, size=4)
+
+    verified_rpdo_count = client.sdo_read(0x1600, 0x00)
+    verified_tpdo_count = client.sdo_read(0x1A00, 0x00)
+    if verified_rpdo_count != len(rpdo_mapping):
+        raise ValueError("RPDO1 mapping count verification failed")
+    if verified_tpdo_count != len(tpdo_mapping):
+        raise ValueError("TPDO1 mapping count verification failed")
+
+    for subindex, expected in enumerate(rpdo_mapping, start=1):
+        actual = client.sdo_read(0x1600, subindex)
+        if actual != expected:
+            raise ValueError(f"RPDO1 mapping {subindex} verification failed")
+    for subindex, expected in enumerate(tpdo_mapping, start=1):
+        actual = client.sdo_read(0x1A00, subindex)
+        if actual != expected:
+            raise ValueError(f"TPDO1 mapping {subindex} verification failed")
+
+    return PdoConfigurationResult(
+        rpdo1_cob_id=rpdo1_cob_id,
+        tpdo1_cob_id=tpdo1_cob_id,
+        rpdo1_mapping=rpdo_mapping,
+        tpdo1_mapping=tpdo_mapping,
+    )
 
 
 def _validate_node_id(node_id: int) -> None:

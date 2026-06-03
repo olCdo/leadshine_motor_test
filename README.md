@@ -81,3 +81,23 @@ PYTHONPATH=code python3 -m leadshine_motor_test --check-canopen-comm --interface
 result=ok
 status_word=0x....
 ```
+
+## Orange Pi PDO mapping 配置测试
+
+这个测试会通过 `SDO` 临时写入 `RPDO1` / `TPDO1` mapping。
+
+它不会写 `6040 control word`，不会设置 `60FF target velocity`，不会使能驱动器，也不会让电机运动。它也不会保存参数到驱动器，断电后驱动器会回到原有持久配置。
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --configure-pdo-mapping --interface can0 --node-id 1
+```
+
+通过时会看到：
+
+```text
+result=ok
+rpdo1_cob_id=0x201
+tpdo1_cob_id=0x181
+rpdo1_mapping=0x60400010,0x60FF0020
+tpdo1_mapping=0x60410010,0x606C0020
+```

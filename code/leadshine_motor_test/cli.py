@@ -17,6 +17,7 @@ from .config import AppConfig
 from .pdo import (
     RPDO1_CONTROL_WORD_TARGET_VELOCITY,
     TPDO1_STATUS_WORD_ACTUAL_VELOCITY,
+    configure_velocity_pdos,
     decode_tpdo1_status_velocity,
     encode_rpdo1_control_velocity,
     pulse_per_second_to_rpm,
@@ -78,6 +79,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run offline PDO mapping and payload codec checks and exit.",
     )
+    parser.add_argument(
+        "--configure-pdo-mapping",
+        action="store_true",
+        help="Temporarily configure RPDO1/TPDO1 mapping via SDO. Does not enable or move the motor.",
+    )
     return parser
 
 
@@ -117,6 +123,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_pdo_codecs:
         _run_pdo_codec_check(config)
         return 0
+
+    if args.configure_pdo_mapping:
+        return _run_pdo_mapping_config(config)
 
     parser.print_help()
     return 0
@@ -189,3 +198,35 @@ def _run_pdo_codec_check(config: AppConfig) -> None:
     print(f"decoded_status_word=0x{decoded.status_word:04X}")
     print(f"decoded_actual_velocity_pulse_s={decoded.actual_velocity_pulse_s}")
     print(f"decoded_actual_velocity_rpm={actual_rpm:.3f}")
+
+
+def _run_pdo_mapping_config(config: AppConfig) -> int:
+    print(f"opening_socketcan={config.interface}")
+    print("test_type=communication")
+    print("motor_motion=no")
+    print("action=configure temporary RPDO1/TPDO1 mapping via SDO")
+    print("writes_control_word=no")
+    print("stores_parameters=no")
+    try:
+        with SocketCanBus(config.interface) as bus:
+            client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
+            result = configure_velocity_pdos(client)
+    except SdoTimeoutError as exc:
+        print("result=timeout")
+        print(f"error={exc}")
+        return 2
+    except SocketCanError as exc:
+        print("result=socketcan_error")
+        print(f"error={exc}")
+        return 2
+    except Exception as exc:
+        print("result=error")
+        print(f"error={exc}")
+        return 2
+
+    print("result=ok")
+    print(f"rpdo1_cob_id=0x{result.rpdo1_cob_id:03X}")
+    print(f"tpdo1_cob_id=0x{result.tpdo1_cob_id:03X}")
+    print("rpdo1_mapping=" + ",".join(f"0x{value:08X}" for value in result.rpdo1_mapping))
+    print("tpdo1_mapping=" + ",".join(f"0x{value:08X}" for value in result.tpdo1_mapping))
+    return 0
