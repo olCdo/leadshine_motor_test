@@ -52,3 +52,19 @@
 
 - 本步骤没有接入真实 CAN，也没有实现 `CANopen`、`SDO` 或 `PDO`。
 - 下一步应实现 `CANopen` 基础通信，并继续避免真实电机运动。
+
+## 2026-06-03 - Orange Pi 测试流程要求
+
+### 已完成
+
+- 明确后续每个可测试开发步骤完成后，需要 push 到远程仓库，方便 Orange Pi 拉取。
+- 在 `AGENTS.md`、`docs/development_process.md`、`docs/version_control.md` 和 `README.md` 中补充 Orange Pi 拉取和测试说明要求。
+
+### 验证
+
+- 待提交后执行 `git status --short --ignored`。
+- 待 push 后确认远程仓库包含当前测试代码。
+
+### 问题 / 备注
+
+- 当前可测试内容仍然只是 `CLI` 骨架，不需要连接电机，也不会访问 CAN。

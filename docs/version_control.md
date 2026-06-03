@@ -12,6 +12,8 @@
 https://github.com/olCdo/leadshine_motor_test.git
 ```
 
+Orange Pi 测试依赖远程仓库同步。每个可测试开发步骤完成后，应 push 当前 commit，方便 Orange Pi 拉取。
+
 ## Commit 范围
 
 使用小步 commit。每个 commit 应对应一个明确开发步骤。
@@ -57,3 +59,10 @@ chore: add project standards and development logs
 3. 更新 `dev_logs/todo.md`。
 4. 运行 `git status --short`。
 5. 确认 ignored 本地文件没有被 staged。
+
+## Push 规则
+
+- 每个完成并验证的开发步骤应形成独立 commit。
+- 需要用户在 Orange Pi 上测试时，commit 后 push 到 `origin master`。
+- push 前确认 `docs/*.pdf`、`logs/`、`*.csv`、`__pycache__/` 没有进入 staged。
+- push 后在回复中给出 Orange Pi 的拉取和测试方法。

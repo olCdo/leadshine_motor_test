@@ -33,6 +33,7 @@
 
 - 真机测试前需要确认 Orange Pi 5 Plus 上的 CAN interface 名称、bitrate 和 node ID。
 - 所有目标监控对象是否都能按预期映射到 `TPDO`，需要在驱动器上验证。
+- 每个可测试步骤完成后，需要 push 到远程仓库，并给出 Orange Pi 拉取和测试命令。
 
 ## 已完成
 
