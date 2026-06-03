@@ -14,7 +14,13 @@ from .canopen import (
     encode_sdo_upload_request,
 )
 from .config import AppConfig
-from .drive import StatusWord, build_velocity_command, disable_control_sequence, enable_control_sequence
+from .drive import (
+    StatusWord,
+    build_velocity_command,
+    disable_control_sequence,
+    enable_control_sequence,
+    prepare_velocity_mode,
+)
 from .pdo import (
     RPDO1_CONTROL_WORD_TARGET_VELOCITY,
     TPDO1_STATUS_WORD_ACTUAL_VELOCITY,
@@ -90,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run offline drive status/control safety checks and exit.",
     )
+    parser.add_argument(
+        "--prepare-velocity-mode",
+        action="store_true",
+        help="Configure PDOs and Profile Velocity Mode via SDO. Does not enable or move the motor.",
+    )
     return parser
 
 
@@ -136,6 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_drive_codecs:
         _run_drive_codec_check(config)
         return 0
+
+    if args.prepare_velocity_mode:
+        return _run_prepare_velocity_mode(config)
 
     parser.print_help()
     return 0
@@ -261,3 +275,42 @@ def _run_drive_codec_check(config: AppConfig) -> None:
     print(f"target_rpm={command.target_rpm:g}")
     print(f"target_velocity_pulse_s={command.target_velocity_pulse_s}")
     print(f"rpdo1={command.frame.arbitration_id:03X}:{command.frame.data.hex()}")
+
+
+def _run_prepare_velocity_mode(config: AppConfig) -> int:
+    print(f"opening_socketcan={config.interface}")
+    print("test_type=communication")
+    print("motor_motion=no")
+    print("action=prepare Profile Velocity Mode via SDO")
+    print("writes_control_word=no")
+    print("target_velocity=0")
+    print("stores_parameters=no")
+    try:
+        with SocketCanBus(config.interface) as bus:
+            client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
+            result = prepare_velocity_mode(
+                client,
+                accel_rpm_s=config.accel_rpm_s,
+                decel_rpm_s=config.decel_rpm_s,
+                pulses_per_rev=config.pulses_per_rev,
+            )
+    except SdoTimeoutError as exc:
+        print("result=timeout")
+        print(f"error={exc}")
+        return 2
+    except SocketCanError as exc:
+        print("result=socketcan_error")
+        print(f"error={exc}")
+        return 2
+    except Exception as exc:
+        print("result=error")
+        print(f"error={exc}")
+        return 2
+
+    print("result=ok")
+    print(f"mode_display={result.mode_display}")
+    print(f"status_word=0x{result.status_word.raw:04X}")
+    print(f"state={result.status_word.state_label()}")
+    print(f"acceleration_pulse_s2={result.acceleration_pulse_s2}")
+    print(f"deceleration_pulse_s2={result.deceleration_pulse_s2}")
+    return 0

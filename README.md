@@ -104,3 +104,22 @@ tpdo1_cob_id=0x181
 rpdo1_mapping=0x60400010,0x60FF0020
 tpdo1_mapping=0x60410010,0x606C0020
 ```
+
+## Orange Pi 速度模式准备测试
+
+这个测试会通过 `SDO` 临时配置 `PDO mapping`，设置 `6060 operation mode = 3`，设置 `6083/6084` 加减速，并把 `60FF target velocity` 写为 0。
+
+它不会写 `6040 control word`，不会使能驱动器，也不会让电机运动。它也不会保存参数到驱动器。
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --prepare-velocity-mode --interface can0 --node-id 1
+```
+
+通过时会看到：
+
+```text
+result=ok
+mode_display=3
+status_word=0x....
+state=...
+```
