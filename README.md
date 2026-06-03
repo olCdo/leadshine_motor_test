@@ -44,11 +44,14 @@ PYTHONPATH=code python3 -m leadshine_motor_test --help
 PYTHONPATH=code python3 -m leadshine_motor_test --show-config
 PYTHONPATH=code python3 -m leadshine_motor_test --check-canopen-codecs
 PYTHONPATH=code python3 -m leadshine_motor_test --check-pdo-codecs
+PYTHONPATH=code python3 -m leadshine_motor_test --check-drive-codecs
 ```
 
 `--check-canopen-codecs` 只做离线 `CANopen` NMT / SDO 编码检查，不打开 `can0`，不会让电机运动。
 
 `--check-pdo-codecs` 只做离线 `PDO mapping` 和 payload 编解码检查，不打开 `can0`，不会让电机运动。
+
+`--check-drive-codecs` 只做离线状态字解析、控制字序列和速度限幅检查，不打开 `can0`，不会让电机运动。
 
 ## Orange Pi 通信测试
 

@@ -14,6 +14,7 @@ from .canopen import (
     encode_sdo_upload_request,
 )
 from .config import AppConfig
+from .drive import StatusWord, build_velocity_command, disable_control_sequence, enable_control_sequence
 from .pdo import (
     RPDO1_CONTROL_WORD_TARGET_VELOCITY,
     TPDO1_STATUS_WORD_ACTUAL_VELOCITY,
@@ -84,6 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Temporarily configure RPDO1/TPDO1 mapping via SDO. Does not enable or move the motor.",
     )
+    parser.add_argument(
+        "--check-drive-codecs",
+        action="store_true",
+        help="Run offline drive status/control safety checks and exit.",
+    )
     return parser
 
 
@@ -126,6 +132,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.configure_pdo_mapping:
         return _run_pdo_mapping_config(config)
+
+    if args.check_drive_codecs:
+        _run_drive_codec_check(config)
+        return 0
 
     parser.print_help()
     return 0
@@ -230,3 +240,24 @@ def _run_pdo_mapping_config(config: AppConfig) -> int:
     print("rpdo1_mapping=" + ",".join(f"0x{value:08X}" for value in result.rpdo1_mapping))
     print("tpdo1_mapping=" + ",".join(f"0x{value:08X}" for value in result.tpdo1_mapping))
     return 0
+
+
+def _run_drive_codec_check(config: AppConfig) -> None:
+    status = StatusWord(0x0027)
+    command = build_velocity_command(
+        node_id=config.node_id,
+        control_word=0x000F,
+        target_rpm=120,
+        max_rpm=config.max_rpm,
+        pulses_per_rev=config.pulses_per_rev,
+    )
+
+    print("test_type=offline")
+    print("motor_motion=no")
+    print(f"status_word=0x{status.raw:04X}")
+    print(f"state={status.state_label()}")
+    print("enable_sequence=" + ",".join(f"0x{value:04X}" for value in enable_control_sequence()))
+    print("disable_sequence=" + ",".join(f"0x{value:04X}" for value in disable_control_sequence()))
+    print(f"target_rpm={command.target_rpm:g}")
+    print(f"target_velocity_pulse_s={command.target_velocity_pulse_s}")
+    print(f"rpdo1={command.frame.arbitration_id:03X}:{command.frame.data.hex()}")
