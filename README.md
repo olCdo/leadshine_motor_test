@@ -4,6 +4,14 @@ Leadshine LD2-CAN 电机测试工具。
 
 当前阶段只完成 `Python` 项目骨架和 `CLI` 入口，不包含真实 `CANopen` / `PDO` 控制。
 
+## 安装依赖
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+当前代码的离线检查不需要连接 CAN。后续接入 `SocketCAN` 时会使用 `python-can`。
+
 ## 当前可验证命令
 
 ```powershell
@@ -31,6 +39,7 @@ git pull
 当前阶段只测试 `CLI` 骨架，不连接电机也不会访问 CAN：
 
 ```bash
+python3 -m pip install -r requirements.txt
 PYTHONPATH=code python3 -m leadshine_motor_test --help
 PYTHONPATH=code python3 -m leadshine_motor_test --show-config
 PYTHONPATH=code python3 -m leadshine_motor_test --check-canopen-codecs
