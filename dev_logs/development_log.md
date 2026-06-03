@@ -28,3 +28,27 @@
 - 尚未实现任何电机控制代码。
 - Orange Pi 5 Plus 的 Ubuntu CAN 硬件配置不属于当前仓库第一阶段范围，真机测试前需要单独确认。
 - 目标监控项能否全部稳定映射到 `TPDO`，需要后续真机集成时验证。
+
+## 2026-06-03 - Python 项目骨架
+
+### 已完成
+
+- 创建 `Python` 项目骨架。
+- 新增 `pyproject.toml`，声明包路径、版本和 `leadshine-motor-test` console script。
+- 新增 `code/leadshine_motor_test/` 包目录。
+- 新增 `CLI` 入口，支持 `--help`、`--version`、`--show-config` 和基础配置参数。
+- 新增 `AppConfig`，集中保存默认 `SocketCAN`、node ID、速度限幅和 `pulses_per_rev`。
+- 新增最小 `unittest`，覆盖配置校验和 `CLI` 参数解析。
+- 新增 `README.md`，说明当前阶段的可验证命令。
+
+### 验证
+
+- 运行 `$env:PYTHONPATH='code'; python -m leadshine_motor_test --help`，通过。
+- 运行 `$env:PYTHONPATH='code'; python -m leadshine_motor_test --show-config`，通过。
+- 运行 `$env:PYTHONPATH='code'; python -m unittest discover -s tests`，3 个测试通过。
+- 运行 `$env:PYTHONPATH='code'; python -m compileall -q code tests`，通过。
+
+### 问题 / 备注
+
+- 本步骤没有接入真实 CAN，也没有实现 `CANopen`、`SDO` 或 `PDO`。
+- 下一步应实现 `CANopen` 基础通信，并继续避免真实电机运动。
