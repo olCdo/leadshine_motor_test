@@ -1,61 +1,61 @@
-# Development Process
+# 开发流程
 
-## Development Rhythm
+## 开发节奏
 
-Develop in small, verifiable steps. Each step should have one purpose and one commit.
+采用小步、可验证的方式开发。每一步只做一个目标，并形成一个独立 commit。
 
-Before changing code:
+修改前：
 
-1. Read `AGENTS.md`.
-2. Read the relevant standard documents in `docs/`.
-3. Review `dev_logs/todo.md`.
-4. Add or update the todo entry for the current step.
+1. 阅读 `AGENTS.md`。
+2. 阅读 `docs/` 中相关标准文件。
+3. 查看 `dev_logs/todo.md`。
+4. 为当前步骤新增或更新 todo 记录。
 
-After changing code or documents:
+修改后：
 
-1. Run the relevant verification command.
-2. Update `dev_logs/development_log.md` with:
-   - What changed.
-   - What was verified.
-   - What failed or remains uncertain.
-3. Update `dev_logs/todo.md`.
-4. Check `git status`.
-5. Commit only the completed step.
+1. 运行相关验证命令。
+2. 更新 `dev_logs/development_log.md`，记录：
+   - 改了什么。
+   - 验证了什么。
+   - 失败项或仍不确定的问题。
+3. 更新 `dev_logs/todo.md`。
+4. 检查 `git status`。
+5. 只提交当前已完成步骤。
 
-## Planned Development Steps
+## 计划开发步骤
 
-1. Project governance files.
-2. Python project skeleton.
-3. CANopen base communication.
-4. PDO configuration and payload encoding.
-5. Velocity-mode control.
-6. Telemetry monitoring and CSV logging.
+1. 项目治理文件。
+2. `Python` 项目骨架。
+3. `CANopen` 基础通信。
+4. `PDO` 配置和 payload 编解码。
+5. 速度模式控制。
+6. telemetry 监控和 `CSV logging`。
 
-Do not combine these steps unless the user explicitly asks for it.
+除非用户明确要求，否则不要合并多个开发步骤。
 
-## Verification Expectations
+## 验证要求
 
-- Documentation-only changes:
-  - Check `git status`.
-  - Confirm ignored files stay ignored.
-- Python skeleton:
-  - Run import checks.
-  - Run CLI help.
-- Communication layer:
-  - Run unit tests for message encoding.
-  - Run non-motion hardware communication checks when hardware is available.
-- Motor-control changes:
-  - Run unit tests.
-  - Verify speed limits before any real motor movement.
-  - Test low rpm first.
+- 仅文档变更：
+  - 检查 `git status`。
+  - 确认 ignored 文件仍被忽略。
+- `Python` 骨架：
+  - 运行 import 检查。
+  - 运行 `CLI` help。
+- 通信层：
+  - 为 message 编码运行单元测试。
+  - 有硬件时运行不涉及电机运动的通信检查。
+- 电机控制变更：
+  - 运行单元测试。
+  - 任何真实电机运动前先验证速度限幅。
+  - 先用低 rpm 测试。
 
-## Logging Standard
+## 日志标准
 
-Each log entry should include:
+每条日志应包含：
 
-- Date.
-- Completed items.
-- Verification.
-- Issues or notes.
+- 日期。
+- 已完成事项。
+- 验证结果。
+- 问题或备注。
 
-Keep the log factual. Do not remove old entries unless correcting a clear mistake.
+日志必须客观记录。除非修正明确错误，否则不要删除历史记录。

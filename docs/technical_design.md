@@ -1,85 +1,85 @@
-# Technical Design
+# 技术设计
 
-## Architecture
+## 架构
 
-The program should be organized as a small Python CLI application with clear boundaries:
+程序应组织为一个小型 Python CLI 应用，模块边界保持清晰：
 
-- CLI command loop.
-- Configuration and safety limits.
-- CANopen transport.
-- PDO mapping and payload encoding.
-- Drive state and telemetry decoding.
-- CSV logging.
+- `CLI` 命令循环。
+- 配置和安全限幅。
+- `CANopen` transport。
+- `PDO mapping` 和 payload 编码。
+- 驱动器状态与 telemetry 解码。
+- `CSV logging`。
 
-The first implementation should avoid broad abstractions. Keep the code small and direct until real hardware behavior is verified.
+第一版避免过度抽象。代码应保持直接、可读，等真机行为验证后再扩展。
 
-## CANopen Strategy
+## CANopen 策略
 
-Use SocketCAN on Ubuntu through `python-can`.
+在 Ubuntu 上通过 `python-can` 使用 `SocketCAN`。
 
-The program does not depend on an EDS file in the first version. It uses known object dictionary entries from the Leadshine LD2-CAN manual.
+第一版不依赖 EDS 文件，而是使用 Leadshine LD2-CAN 手册中确认的 object dictionary。
 
-SDO is allowed only during startup and setup. Runtime control and telemetry should use PDO.
+`SDO` 只用于启动和配置阶段。运行期控制和 telemetry 必须使用 `PDO`。
 
-## Startup Flow
+## 启动流程
 
-1. Open CAN interface.
-2. Send NMT reset/start sequence as needed.
-3. Enter Pre-operational state for PDO configuration.
-4. Configure RPDO and TPDO mappings through SDO.
-5. Set Profile Velocity Mode with `6060 = 3`.
-6. Set acceleration and deceleration parameters.
-7. Enter Operational state.
-8. Start CLI command loop and telemetry handling.
+1. 打开 CAN interface。
+2. 按需要发送 `NMT reset/start`。
+3. 进入 Pre-operational 状态，准备配置 `PDO`。
+4. 通过 `SDO` 配置 `RPDO` 和 `TPDO` mapping。
+5. 写入 `6060 = 3`，设置 `Profile Velocity Mode`。
+6. 设置 acceleration 和 deceleration 参数。
+7. 进入 Operational 状态。
+8. 启动 `CLI` 命令循环和 telemetry 处理。
 
-## Runtime PDO Design
+## 运行期 PDO 设计
 
 ### RPDO
 
-RPDO should carry:
+`RPDO` 应携带：
 
-- `6040` control word.
-- `60FF` target velocity.
+- `6040 control word`。
+- `60FF target velocity`。
 
-The CLI accepts rpm. The driver object uses pulse/s, so convert with:
+`CLI` 接收 rpm，驱动器对象使用 pulse/s，因此按以下公式换算：
 
 ```text
 pulse_per_second = rpm * pulses_per_rev / 60
 ```
 
-Default `pulses_per_rev` is `10000`.
+默认 `pulses_per_rev` 为 `10000`。
 
 ### TPDO
 
-TPDO should return:
+`TPDO` 应返回：
 
-- `6041` status word.
-- `606C` actual velocity.
-- Bus voltage.
-- Temperature.
-- Actual torque percent.
+- `6041 status word`。
+- `606C actual velocity`。
+- 母线电压。
+- 温度。
+- 实际转矩百分比。
 
-If the drive cannot map every desired feedback item into the selected TPDO layout, keep speed and status word as mandatory and document any missing telemetry in the development log.
+如果驱动器无法把所有目标反馈项映射到选定的 `TPDO` 布局中，则 `6041 status word` 和 `606C actual velocity` 必须保留，缺失的 telemetry 记录到 `dev_logs/development_log.md`。
 
-## Important Object Dictionary Entries
+## 关键 Object Dictionary
 
-- `6040`: control word.
-- `6041`: status word.
-- `6060`: operation mode.
-- `6061`: operation mode display.
-- `606C`: actual velocity.
-- `6077`: actual torque.
-- `6079`: bus voltage.
-- `6083`: profile acceleration.
-- `6084`: profile deceleration.
-- `60FF`: target velocity.
-- `5501:04`: actual torque monitor, alternative percent-style load reference.
-- `5502:06`: temperature monitor.
+- `6040 control word`。
+- `6041 status word`。
+- `6060 operation mode`。
+- `6061 operation mode display`。
+- `606C actual velocity`。
+- `6077 actual torque`。
+- `6079 bus voltage`。
+- `6083 profile acceleration`。
+- `6084 profile deceleration`。
+- `60FF target velocity`。
+- `5501:04 actual torque monitor`，作为实际转矩百分比的候选来源。
+- `5502:06 temperature monitor`。
 
-## Error Handling
+## 错误处理
 
-- Treat SDO timeout as startup failure.
-- Treat missing TPDO updates as communication loss.
-- When fault bit is present in `6041`, stop accepting non-zero speed commands.
-- Do not automatically reset faults.
-- Log all communication and drive-state errors.
+- `SDO timeout` 视为启动失败。
+- 长时间没有 `TPDO` 更新视为通信丢失。
+- `6041 status word` 出现 fault bit 后，拒绝接受非零 `speed <rpm>`。
+- 不自动执行 fault reset。
+- 所有通信错误和驱动器状态错误都必须记录。

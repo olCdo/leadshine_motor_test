@@ -1,66 +1,66 @@
-# Requirements
+# 需求说明
 
-## Goal
+## 目标
 
-Build a safe Python command-line motor test program for a Leadshine LD2-CAN servo drive.
+构建一个安全的 Python CLI 电机测试程序，用于测试 Leadshine LD2-CAN 伺服驱动器。
 
-The program will run on Ubuntu on Orange Pi 5 Plus and control one motor through CANopen PDO in Profile Velocity Mode.
+程序运行在 Orange Pi 5 Plus 的 Ubuntu 环境中，通过 CANopen PDO 和 Profile Velocity Mode 控制单台电机。
 
-## Confirmed Requirements
+## 已确认需求
 
-- Language: Python.
-- Runtime OS: Ubuntu.
-- Development OS: Windows is allowed for editing only.
-- Hardware target: Orange Pi 5 Plus connected to a Leadshine LD2-CAN drive.
-- Communication: CANopen over SocketCAN.
-- Control mode: Profile Velocity Mode.
-- Runtime control must use PDO:
-  - Set target speed in rpm.
-  - Enable the drive.
-  - Disable the drive.
-  - Stop the motor.
-- Runtime feedback must use PDO:
-  - Actual speed in rpm.
-  - Bus voltage.
-  - Actual torque percent as load/current reference.
-  - Enable state.
-  - Fault state.
-  - Temperature.
-- SDO may be used during startup for:
-  - Temporary PDO mapping configuration.
-  - Operation mode setup.
-  - Acceleration and deceleration setup.
-  - Basic startup checks.
-- CSV logging should be enabled by default during tests.
+- 开发语言：`Python`。
+- 运行系统：`Ubuntu`。
+- 开发系统：Windows 可用于代码编辑。
+- 目标硬件：Orange Pi 5 Plus 连接 Leadshine LD2-CAN 驱动器。
+- 通信方式：基于 `SocketCAN` 的 `CANopen`。
+- 控制模式：`Profile Velocity Mode`。
+- 运行期控制必须使用 `PDO`：
+  - 设置目标速度，单位为 rpm。
+  - 使能驱动器。
+  - 断使能驱动器。
+  - 停止电机。
+- 运行期反馈必须使用 `PDO`：
+  - 实际速度，单位为 rpm。
+  - 母线电压。
+  - 实际转矩百分比，作为负载 / 电流参考。
+  - 是否使能。
+  - 是否 fault。
+  - 温度。
+- 启动阶段允许使用 `SDO`：
+  - 临时配置 `PDO mapping`。
+  - 设置 operation mode。
+  - 设置 acceleration 和 deceleration。
+  - 执行基础启动检查。
+- 测试运行时默认开启 `CSV logging`。
 
-## First Version Scope
+## 第一版范围
 
-- Single motor only.
-- CLI interaction only.
-- Real hardware only.
-- Conservative defaults:
-  - Max speed: 500 rpm.
-  - Acceleration: 500 rpm/s.
-  - Deceleration: 500 rpm/s.
-  - Pulses per revolution: 10000.
-- Default CAN settings:
-  - Interface: `can0`.
-  - Bitrate: `1000000`.
-  - Node ID: `1`.
+- 只控制单台电机。
+- 只提供 `CLI` 交互。
+- 只支持真实硬件。
+- 保守默认值：
+  - 最大速度：500 rpm。
+  - acceleration：500 rpm/s。
+  - deceleration：500 rpm/s。
+  - `pulses_per_rev`：10000。
+- 默认 CAN 设置：
+  - interface：`can0`。
+  - bitrate：`1000000`。
+  - node ID：`1`。
 
-## Out of Scope for First Version
+## 第一版不做
 
-- Multi-motor control.
-- Synchronized multi-axis control.
-- Web UI.
-- Windows local mock mode.
-- Persistent saving of drive parameters.
-- Automatic drive fault reset.
-- Direct management of external emergency stop, limit, or brake IO.
+- 多电机控制。
+- 多轴同步控制。
+- Web UI。
+- Windows 本地 mock mode。
+- 永久保存驱动器参数。
+- 自动执行 fault reset。
+- 直接管理外部 emergency stop、limit 或 brake IO。
 
-## CLI Commands
+## CLI 命令
 
-The first CLI version should provide:
+第一版 `CLI` 需要提供：
 
 - `enable`
 - `disable`

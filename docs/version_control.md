@@ -1,59 +1,59 @@
-# Version Control
+# 版本管理
 
-## Branch
+## 分支
 
-Use the current `master` branch unless the user explicitly requests a different default branch.
+默认使用当前 `master` 分支，除非用户明确要求切换默认分支。
 
-## Remote
+## 远程仓库
 
-Remote repository:
+远程仓库：
 
 ```text
 https://github.com/olCdo/leadshine_motor_test.git
 ```
 
-## Commit Scope
+## Commit 范围
 
-Use small commits. Each commit should correspond to one development step.
+使用小步 commit。每个 commit 应对应一个明确开发步骤。
 
-Recommended first commit:
+首次 commit：
 
 ```text
 chore: add project standards and development logs
 ```
 
-The first commit should include only:
+首次 commit 只应包含：
 
 - `AGENTS.md`
 - `.gitignore`
 - `docs/*.md`
 - `dev_logs/*.md`
 
-## Ignore Rules
+## Ignore 规则
 
-Do not commit:
+不要提交：
 
 - `docs/*.pdf`
-- Python cache files.
-- Virtual environments.
-- Runtime logs.
-- CSV test output.
-- Local editor files.
+- Python cache 文件。
+- virtual environment。
+- runtime logs。
+- `CSV` 测试输出。
+- 本地编辑器文件。
 
-Do commit:
+应提交：
 
-- Markdown project standards.
-- Development logs.
-- Source code.
-- Tests.
-- Dependency files.
+- Markdown 项目标准。
+- 开发日志。
+- 源代码。
+- 测试。
+- 依赖声明文件。
 
-## Pre-commit Checklist
+## 提交前检查
 
-Before each commit:
+每次 commit 前：
 
-1. Run relevant verification.
-2. Update `dev_logs/development_log.md`.
-3. Update `dev_logs/todo.md`.
-4. Run `git status --short`.
-5. Confirm ignored local files are not staged.
+1. 运行相关验证。
+2. 更新 `dev_logs/development_log.md`。
+3. 更新 `dev_logs/todo.md`。
+4. 运行 `git status --short`。
+5. 确认 ignored 本地文件没有被 staged。

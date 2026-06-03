@@ -1,14 +1,25 @@
 # AGENTS.md
 
-## Project Purpose
+## 项目目的
 
-This project is a Python-based motor test tool for Leadshine LD2-CAN servo drives. The target runtime is Ubuntu on Orange Pi 5 Plus. Windows is used only for code editing and project maintenance.
+本项目是面向 Leadshine LD2-CAN 伺服驱动器的 Python 电机测试工具。目标运行环境是 Orange Pi 5 Plus 上的 Ubuntu，Windows 仅用于代码编写和项目维护。
 
-The first implementation target is a safe command-line test program that controls one motor through CANopen PDO in Profile Velocity Mode.
+第一版目标是实现一个安全的 CLI 测试程序，通过 CANopen PDO 和 Profile Velocity Mode 控制单台电机。
 
-## Required Reading Before Development
+## Markdown 写作规范
 
-Read these files before making project changes:
+本项目所有 `.md` 文件统一采用中文为主的写法。
+
+必须保留英文原文的内容包括：
+
+- 技术名词：`Python`、`Ubuntu`、`SocketCAN`、`CANopen`、`PDO`、`SDO`、`NMT`、`Profile Velocity Mode`、`CLI`、`CSV`。
+- CLI 命令：`enable`、`disable`、`speed <rpm>`、`stop`、`status`、`watch`、`quit`、`help`。
+- CANopen 对象字典和字段：`6040 control word`、`6041 status word`、`60FF target velocity`、`606C actual velocity`、`pulses_per_rev` 等。
+- 文件路径、配置字段、模块名、函数名、包名。
+
+## 开发前必须阅读
+
+每次开发前先阅读这些文件：
 
 - `docs/requirements.md`
 - `docs/technical_design.md`
@@ -16,36 +27,29 @@ Read these files before making project changes:
 - `docs/development_process.md`
 - `docs/version_control.md`
 
-Use the local PDF manual in `docs/` only as a reference. PDF manuals are ignored by git and must not be committed.
+`docs/` 中的本地 PDF 手册仅作为参考资料。PDF 手册被 git 忽略，禁止提交。
 
-## Development Log Requirements
+## 开发日志要求
 
-Every development step must update:
+每次开发步骤都必须更新：
 
-- `dev_logs/development_log.md`: completed work, verification results, and issues found.
-- `dev_logs/todo.md`: current next steps, priorities, blockers, and deferred work.
+- `dev_logs/development_log.md`：记录已完成事项、验证结果、发现的问题。
+- `dev_logs/todo.md`：记录下一步计划、优先级、阻塞项和延期事项。
 
-Do not make large batches of unrelated changes. Each development step should be small, testable, and independently commit-ready.
+不要一次性修改大量无关内容。每一步开发都应该小、可验证、可单独提交。
 
-## Safety Requirements
+## 安全要求
 
-Motor-control code must follow `docs/safety_guidelines.md`. In particular:
+电机控制代码必须遵守 `docs/safety_guidelines.md`，尤其是：
 
-- Keep conservative speed and acceleration defaults.
-- Reject speed commands above the configured limit.
-- On quit, Ctrl+C, or error, command zero speed before disabling the drive.
-- Do not automatically reset drive faults.
-- Do not permanently save drive parameters unless a future requirement explicitly allows it.
+- 使用保守的速度和加减速默认值。
+- 拒绝超过配置限幅的 `speed <rpm>` 命令。
+- `quit`、Ctrl+C 或异常退出时，先下发零速度，再断使能。
+- 不自动执行 fault reset。
+- 除非后续需求明确允许，否则不永久保存驱动器参数。
 
-## Version Control Rules
+## 版本管理规则
 
-Follow `docs/version_control.md`.
+遵守 `docs/version_control.md`。
 
-The first commit should include only project governance files:
-
-- `AGENTS.md`
-- `.gitignore`
-- `docs/*.md`
-- `dev_logs/*.md`
-
-Do not commit `docs/*.pdf`, runtime logs, generated CSV data, virtual environments, or Python cache files.
+提交必须小步推进。电机 PDF、运行日志、CSV 测试数据、虚拟环境、Python cache 文件都不能提交。
