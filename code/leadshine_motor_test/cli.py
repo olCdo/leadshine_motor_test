@@ -32,14 +32,15 @@ from .pdo import (
     rpm_to_pulse_per_second,
 )
 from .socketcan import SocketCanBus, SocketCanError
+from .telemetry import TelemetryValue, read_drive_status
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="leadshine-motor-test",
         description=(
-            "Leadshine LD2-CAN motor test CLI skeleton. "
-            "CANopen PDO control is not implemented in this step."
+            "Leadshine LD2-CAN motor test CLI for CANopen communication, "
+            "PDO setup, safe enable checks, and telemetry reads."
         ),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -107,6 +108,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Enable with RPDO target velocity 0, then disable. Does not command motor motion.",
     )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Read drive status and telemetry via SDO. Does not enable or move the motor.",
+    )
     return parser
 
 
@@ -159,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.zero_speed_enable_test:
         return _run_zero_speed_enable_test(config)
+
+    if args.status:
+        return _run_status(config)
 
     parser.print_help()
     return 0
@@ -363,3 +372,57 @@ def _run_zero_speed_enable_test(config: AppConfig) -> int:
     print(f"after_disable=0x{result.after_disable.raw:04X}:{result.after_disable.state_label()}")
     print(f"after_final_shutdown=0x{result.after_final_shutdown.raw:04X}:{result.after_final_shutdown.state_label()}")
     return 0
+
+
+def _run_status(config: AppConfig) -> int:
+    print(f"opening_socketcan={config.interface}")
+    print("test_type=communication")
+    print("motor_motion=no")
+    print("action=read drive status and telemetry via SDO")
+    print("writes_control_word=no")
+    try:
+        with SocketCanBus(config.interface) as bus:
+            client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
+            snapshot = read_drive_status(client, pulses_per_rev=config.pulses_per_rev)
+    except SdoTimeoutError as exc:
+        print("result=timeout")
+        print(f"error={exc}")
+        return 2
+    except SocketCanError as exc:
+        print("result=socketcan_error")
+        print(f"error={exc}")
+        return 2
+    except Exception as exc:
+        print("result=error")
+        print(f"error={exc}")
+        return 2
+
+    print("result=ok")
+    print(f"status_word=0x{snapshot.status_word.raw:04X}")
+    print(f"state={snapshot.status_word.state_label()}")
+    print(f"operation_enabled={_bool_text(snapshot.status_word.operation_enabled)}")
+    print(f"fault={_bool_text(snapshot.status_word.fault)}")
+    print(f"warning={_bool_text(snapshot.status_word.warning)}")
+    _print_value("actual_velocity_pulse_s", snapshot.actual_velocity_pulse_s)
+    if snapshot.actual_velocity_rpm is None:
+        print("actual_velocity_rpm=unavailable")
+    else:
+        print(f"actual_velocity_rpm={snapshot.actual_velocity_rpm:.3f}")
+    _print_value("bus_voltage_raw", snapshot.bus_voltage_raw)
+    _print_value("current_actual_value_raw", snapshot.current_actual_value_raw)
+    _print_value("torque_actual_value_raw", snapshot.torque_actual_value_raw)
+    _print_value("temperature_raw", snapshot.temperature_raw)
+    return 0
+
+
+def _print_value(name: str, telemetry: TelemetryValue) -> None:
+    if telemetry.value is None:
+        print(f"{name}=unavailable")
+        if telemetry.error:
+            print(f"{name}_error={telemetry.error}")
+        return
+    print(f"{name}={telemetry.value}")
+
+
+def _bool_text(value: bool) -> str:
+    return "yes" if value else "no"

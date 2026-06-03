@@ -144,3 +144,25 @@ result=ok
 after_enable=0x....:operation_enabled
 after_final_shutdown=0x....
 ```
+
+## Orange Pi 状态读取测试
+
+这个测试会通过 `SDO` 读取驱动器状态和 telemetry。
+它不写 `6040 control word`，不使能，不设置速度，也不会让电机运动。
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --status --interface can0 --node-id 1
+```
+
+通过时会看到：
+
+```text
+result=ok
+status_word=0x....
+state=...
+operation_enabled=yes/no
+actual_velocity_pulse_s=...
+actual_velocity_rpm=...
+```
+
+`bus_voltage_raw`、`current_actual_value_raw`、`torque_actual_value_raw`、`temperature_raw` 是可选读取项；如果驱动器不支持对应对象，会显示 `unavailable` 和对应的 `SDO abort` 信息。
