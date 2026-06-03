@@ -3,6 +3,14 @@ from __future__ import annotations
 import argparse
 
 from . import __version__
+from .canopen import (
+    CanMessage,
+    NmtCommand,
+    decode_sdo_upload_response,
+    encode_nmt,
+    encode_sdo_download_request,
+    encode_sdo_upload_request,
+)
 from .config import AppConfig
 
 
@@ -43,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print resolved configuration and exit.",
     )
+    parser.add_argument(
+        "--check-canopen-codecs",
+        action="store_true",
+        help="Run offline CANopen NMT/SDO codec checks and exit.",
+    )
     return parser
 
 
@@ -71,5 +84,25 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{field_name}={value}")
         return 0
 
+    if args.check_canopen_codecs:
+        _run_canopen_codec_check(config)
+        return 0
+
     parser.print_help()
     return 0
+
+
+def _run_canopen_codec_check(config: AppConfig) -> None:
+    nmt = encode_nmt(NmtCommand.START_REMOTE_NODE, config.node_id)
+    upload = encode_sdo_upload_request(config.node_id, 0x6041, 0)
+    download = encode_sdo_download_request(config.node_id, 0x6060, 0, 3, size=1, signed=True)
+    response = CanMessage(
+        arbitration_id=0x580 + config.node_id,
+        data=bytes([0x4B, 0x41, 0x60, 0x00, 0x37, 0x12, 0x00, 0x00]),
+    )
+    decoded = decode_sdo_upload_response(response, config.node_id, 0x6041, 0)
+
+    print(f"nmt={nmt.arbitration_id:03X}:{nmt.data.hex()}")
+    print(f"sdo_upload={upload.arbitration_id:03X}:{upload.data.hex()}")
+    print(f"sdo_download={download.arbitration_id:03X}:{download.data.hex()}")
+    print(f"decoded_status_word=0x{decoded:04X}")

@@ -33,5 +33,7 @@ git pull
 ```bash
 PYTHONPATH=code python3 -m leadshine_motor_test --help
 PYTHONPATH=code python3 -m leadshine_motor_test --show-config
-PYTHONPATH=code python3 -m unittest discover -s tests
+PYTHONPATH=code python3 -m leadshine_motor_test --check-canopen-codecs
 ```
+
+`--check-canopen-codecs` 只做离线 `CANopen` NMT / SDO 编码检查，不打开 `can0`，不会让电机运动。
