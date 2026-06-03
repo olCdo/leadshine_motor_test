@@ -5,13 +5,16 @@ import argparse
 from . import __version__
 from .canopen import (
     CanMessage,
+    CanopenClient,
     NmtCommand,
+    SdoTimeoutError,
     decode_sdo_upload_response,
     encode_nmt,
     encode_sdo_download_request,
     encode_sdo_upload_request,
 )
 from .config import AppConfig
+from .socketcan import SocketCanBus, SocketCanError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Pulse count per motor revolution, default: 10000",
     )
     parser.add_argument("--log-dir", default=AppConfig.log_dir, help="CSV log directory, default: logs")
+    parser.add_argument("--timeout", type=float, default=AppConfig.timeout, help="SDO timeout in seconds, default: 1.0")
     parser.add_argument(
         "--show-config",
         action="store_true",
@@ -55,6 +59,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--check-canopen-codecs",
         action="store_true",
         help="Run offline CANopen NMT/SDO codec checks and exit.",
+    )
+    parser.add_argument(
+        "--check-canopen-comm",
+        action="store_true",
+        help="Open SocketCAN and read 6041 status word via SDO. Does not enable or move the motor.",
     )
     return parser
 
@@ -69,6 +78,7 @@ def config_from_args(args: argparse.Namespace) -> AppConfig:
         decel_rpm_s=args.decel_rpm_s,
         pulses_per_rev=args.pulses_per_rev,
         log_dir=args.log_dir,
+        timeout=args.timeout,
     )
     config.validate()
     return config
@@ -88,6 +98,9 @@ def main(argv: list[str] | None = None) -> int:
         _run_canopen_codec_check(config)
         return 0
 
+    if args.check_canopen_comm:
+        return _run_canopen_comm_check(config)
+
     parser.print_help()
     return 0
 
@@ -106,3 +119,30 @@ def _run_canopen_codec_check(config: AppConfig) -> None:
     print(f"sdo_upload={upload.arbitration_id:03X}:{upload.data.hex()}")
     print(f"sdo_download={download.arbitration_id:03X}:{download.data.hex()}")
     print(f"decoded_status_word=0x{decoded:04X}")
+
+
+def _run_canopen_comm_check(config: AppConfig) -> int:
+    print(f"opening_socketcan={config.interface}")
+    print("test_type=communication")
+    print("motor_motion=no")
+    print("action=read 6041 status word via SDO")
+    try:
+        with SocketCanBus(config.interface) as bus:
+            client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
+            status_word = client.sdo_read(0x6041, 0)
+    except SdoTimeoutError as exc:
+        print(f"result=timeout")
+        print(f"error={exc}")
+        return 2
+    except SocketCanError as exc:
+        print("result=socketcan_error")
+        print(f"error={exc}")
+        return 2
+    except Exception as exc:
+        print("result=error")
+        print(f"error={exc}")
+        return 2
+
+    print("result=ok")
+    print(f"status_word=0x{status_word:04X}")
+    return 0

@@ -19,6 +19,7 @@ class AppConfig:
     decel_rpm_s: int = 500
     pulses_per_rev: int = 10_000
     log_dir: str = "logs"
+    timeout: float = 1.0
 
     def validate(self) -> None:
         if not self.interface:
@@ -35,3 +36,5 @@ class AppConfig:
             raise ValueError("decel_rpm_s must be positive")
         if self.pulses_per_rev <= 0:
             raise ValueError("pulses_per_rev must be positive")
+        if self.timeout <= 0:
+            raise ValueError("timeout must be positive")

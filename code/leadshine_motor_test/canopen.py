@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
+from time import monotonic
 from typing import Protocol
 
 
@@ -142,12 +143,15 @@ class CanopenClient:
 
     def _recv_sdo_response(self, index: int, subindex: int) -> CanMessage:
         expected_id = 0x580 + self.node_id
-        while True:
-            message = self._bus.recv(self.timeout)
+        deadline = monotonic() + self.timeout
+        while monotonic() < deadline:
+            remaining = max(0.0, deadline - monotonic())
+            message = self._bus.recv(remaining)
             if message is None:
-                raise SdoTimeoutError(f"timeout waiting for SDO response 0x{index:04X}:{subindex:02X}")
+                break
             if message.arbitration_id == expected_id:
                 return message
+        raise SdoTimeoutError(f"timeout waiting for SDO response 0x{index:04X}:{subindex:02X}")
 
 
 def _validate_sdo_response_header(message: CanMessage, node_id: int, index: int, subindex: int) -> None:
