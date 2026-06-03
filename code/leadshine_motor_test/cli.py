@@ -20,6 +20,7 @@ from .drive import (
     disable_control_sequence,
     enable_control_sequence,
     prepare_velocity_mode,
+    run_zero_speed_enable_test,
 )
 from .pdo import (
     RPDO1_CONTROL_WORD_TARGET_VELOCITY,
@@ -101,6 +102,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Configure PDOs and Profile Velocity Mode via SDO. Does not enable or move the motor.",
     )
+    parser.add_argument(
+        "--zero-speed-enable-test",
+        action="store_true",
+        help="Enable with RPDO target velocity 0, then disable. Does not command motor motion.",
+    )
     return parser
 
 
@@ -150,6 +156,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.prepare_velocity_mode:
         return _run_prepare_velocity_mode(config)
+
+    if args.zero_speed_enable_test:
+        return _run_zero_speed_enable_test(config)
 
     parser.print_help()
     return 0
@@ -314,4 +323,43 @@ def _run_prepare_velocity_mode(config: AppConfig) -> int:
     print(f"state={result.status_word.state_label()}")
     print(f"acceleration_pulse_s2={result.acceleration_pulse_s2}")
     print(f"deceleration_pulse_s2={result.deceleration_pulse_s2}")
+    return 0
+
+
+def _run_zero_speed_enable_test(config: AppConfig) -> int:
+    print(f"opening_socketcan={config.interface}")
+    print("test_type=enable")
+    print("motor_motion=not_commanded")
+    print("action=enable briefly with RPDO target velocity 0, then disable")
+    print("target_velocity=0")
+    print("stores_parameters=no")
+    try:
+        with SocketCanBus(config.interface) as bus:
+            client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
+            result = run_zero_speed_enable_test(
+                client,
+                accel_rpm_s=config.accel_rpm_s,
+                decel_rpm_s=config.decel_rpm_s,
+                pulses_per_rev=config.pulses_per_rev,
+            )
+    except SdoTimeoutError as exc:
+        print("result=timeout")
+        print(f"error={exc}")
+        return 2
+    except SocketCanError as exc:
+        print("result=socketcan_error")
+        print(f"error={exc}")
+        return 2
+    except Exception as exc:
+        print("result=error")
+        print(f"error={exc}")
+        return 2
+
+    print("result=ok" if result.after_enable.operation_enabled else "result=warning")
+    print(f"mode_display={result.prepared.mode_display}")
+    print(f"after_shutdown=0x{result.after_shutdown.raw:04X}:{result.after_shutdown.state_label()}")
+    print(f"after_switch_on=0x{result.after_switch_on.raw:04X}:{result.after_switch_on.state_label()}")
+    print(f"after_enable=0x{result.after_enable.raw:04X}:{result.after_enable.state_label()}")
+    print(f"after_disable=0x{result.after_disable.raw:04X}:{result.after_disable.state_label()}")
+    print(f"after_final_shutdown=0x{result.after_final_shutdown.raw:04X}:{result.after_final_shutdown.state_label()}")
     return 0

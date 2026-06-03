@@ -122,6 +122,9 @@ class CanopenClient:
         message = encode_nmt(command, target)
         self._bus.send(message.arbitration_id, message.data)
 
+    def send_message(self, message: CanMessage) -> None:
+        self._bus.send(message.arbitration_id, message.data)
+
     def sdo_read(self, index: int, subindex: int = 0, signed: bool = False) -> int:
         request = encode_sdo_upload_request(self.node_id, index, subindex)
         self._bus.send(request.arbitration_id, request.data)

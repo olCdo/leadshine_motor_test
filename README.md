@@ -126,3 +126,21 @@ state=...
 ```
 
 如果 `mode_set=3` 但 `mode_display` 不是 3，说明 `6060 operation mode` 已写入，但驱动器还没有在 `6061 operation mode display` 中报告生效；此时不要继续做运动测试。
+
+## Orange Pi 零速度使能测试
+
+这个测试会通过 `RPDO1` 写 `6040 control word`，目标速度始终为 0。它会短暂使能驱动器，然后立即断使能。
+
+它不会设置非零速度，不会请求电机转动。但驱动器会进入使能状态，测试前请确认电机固定、急停可用、机械负载安全。
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --zero-speed-enable-test --interface can0 --node-id 1
+```
+
+通过时会看到：
+
+```text
+result=ok
+after_enable=0x....:operation_enabled
+after_final_shutdown=0x....
+```

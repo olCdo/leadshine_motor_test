@@ -97,6 +97,16 @@ class VelocityModePreparation:
     display_matches: bool
 
 
+@dataclass(frozen=True)
+class ZeroSpeedEnableResult:
+    prepared: VelocityModePreparation
+    after_shutdown: StatusWord
+    after_switch_on: StatusWord
+    after_enable: StatusWord
+    after_disable: StatusWord
+    after_final_shutdown: StatusWord
+
+
 def rpm_per_second_to_pulse_per_second2(rpm_per_second: float, pulses_per_rev: int) -> int:
     if pulses_per_rev <= 0:
         raise ValueError("pulses_per_rev must be positive")
@@ -158,6 +168,53 @@ def build_velocity_command(
     )
 
 
+def run_zero_speed_enable_test(
+    client: CanopenClient,
+    accel_rpm_s: int,
+    decel_rpm_s: int,
+    pulses_per_rev: int,
+) -> ZeroSpeedEnableResult:
+    """Enable briefly with target velocity 0, then disable.
+
+    Control is sent through RPDO1. Status checks use SDO reads. This command does
+    not request motor motion because target velocity is always 0.
+    """
+
+    prepared = prepare_velocity_mode(client, accel_rpm_s, decel_rpm_s, pulses_per_rev)
+    if not prepared.display_matches:
+        raise ValueError("operation mode display is not Profile Velocity Mode")
+
+    try:
+        client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.SHUTDOWN)))
+        sleep(0.1)
+        after_shutdown = StatusWord(client.sdo_read(0x6041, 0x00))
+
+        client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.SWITCH_ON)))
+        sleep(0.1)
+        after_switch_on = StatusWord(client.sdo_read(0x6041, 0x00))
+
+        client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.ENABLE_OPERATION)))
+        sleep(0.2)
+        after_enable = StatusWord(client.sdo_read(0x6041, 0x00))
+    finally:
+        client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.DISABLE_OPERATION)))
+        sleep(0.1)
+
+    after_disable = StatusWord(client.sdo_read(0x6041, 0x00))
+    client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.SHUTDOWN)))
+    sleep(0.1)
+    after_final_shutdown = StatusWord(client.sdo_read(0x6041, 0x00))
+
+    return ZeroSpeedEnableResult(
+        prepared=prepared,
+        after_shutdown=after_shutdown,
+        after_switch_on=after_switch_on,
+        after_enable=after_enable,
+        after_disable=after_disable,
+        after_final_shutdown=after_final_shutdown,
+    )
+
+
 def enable_control_sequence() -> tuple[int, int, int]:
     return (
         int(ControlWord.SHUTDOWN),
@@ -171,3 +228,7 @@ def disable_control_sequence() -> tuple[int, int]:
         int(ControlWord.DISABLE_OPERATION),
         int(ControlWord.SHUTDOWN),
     )
+
+
+def _zero_speed_frame(node_id: int, control_word: int) -> CanMessage:
+    return encode_rpdo1_control_velocity(node_id, control_word, 0)
