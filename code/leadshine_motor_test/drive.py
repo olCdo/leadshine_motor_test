@@ -8,6 +8,10 @@ from .pdo import configure_velocity_pdos, encode_rpdo1_control_velocity, rpm_to_
 from .canopen import CanMessage, CanopenClient, NmtCommand
 
 
+FIRST_MOTION_TEST_LIMIT_RPM = 50
+MAX_SPEED_TEST_DURATION_S = 10.0
+
+
 class ControlWord(IntEnum):
     SHUTDOWN = 0x0006
     SWITCH_ON = 0x0007
@@ -103,6 +107,22 @@ class ZeroSpeedEnableResult:
     after_shutdown: StatusWord
     after_switch_on: StatusWord
     after_enable: StatusWord
+    after_disable: StatusWord
+    after_final_shutdown: StatusWord
+
+
+@dataclass(frozen=True)
+class SpeedTestResult:
+    prepared: VelocityModePreparation
+    target_rpm: float
+    target_velocity_pulse_s: int
+    duration_s: float
+    safety_limit_rpm: int
+    after_enable: StatusWord
+    during_run: StatusWord
+    actual_velocity_pulse_s: int
+    actual_velocity_rpm: float
+    after_zero_speed: StatusWord
     after_disable: StatusWord
     after_final_shutdown: StatusWord
 
@@ -215,6 +235,87 @@ def run_zero_speed_enable_test(
     )
 
 
+def run_limited_speed_test(
+    client: CanopenClient,
+    target_rpm: float,
+    duration_s: float,
+    max_rpm: int,
+    accel_rpm_s: int,
+    decel_rpm_s: int,
+    pulses_per_rev: int,
+) -> SpeedTestResult:
+    """Run one bounded low-speed movement, then command zero speed and disable."""
+
+    safety_limit = min(max_rpm, FIRST_MOTION_TEST_LIMIT_RPM)
+    if target_rpm == 0:
+        raise ValueError("target_rpm must be non-zero for speed test")
+    if abs(target_rpm) > safety_limit:
+        raise ValueError(f"target_rpm {target_rpm:g} exceeds safety limit {safety_limit} rpm")
+    if duration_s <= 0 or duration_s > MAX_SPEED_TEST_DURATION_S:
+        raise ValueError(f"duration_s must be > 0 and <= {MAX_SPEED_TEST_DURATION_S:g}")
+
+    prepared = prepare_velocity_mode(client, accel_rpm_s, decel_rpm_s, pulses_per_rev)
+    if not prepared.display_matches:
+        raise ValueError("operation mode display is not Profile Velocity Mode")
+
+    target_command = build_velocity_command(
+        node_id=client.node_id,
+        control_word=int(ControlWord.ENABLE_OPERATION),
+        target_rpm=target_rpm,
+        max_rpm=safety_limit,
+        pulses_per_rev=pulses_per_rev,
+    )
+
+    enable_command_sent = False
+    after_zero_speed = StatusWord(0)
+    after_disable = StatusWord(0)
+    after_final_shutdown = StatusWord(0)
+    try:
+        client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.SHUTDOWN)))
+        sleep(0.1)
+
+        client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.SWITCH_ON)))
+        sleep(0.1)
+
+        client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.ENABLE_OPERATION)))
+        enable_command_sent = True
+        sleep(0.2)
+        after_enable = StatusWord(client.sdo_read(0x6041, 0x00))
+        if not after_enable.operation_enabled:
+            raise ValueError("drive did not reach operation_enabled before speed command")
+
+        client.send_message(target_command.frame)
+        sleep(duration_s)
+        during_run = StatusWord(client.sdo_read(0x6041, 0x00))
+        actual_velocity = client.sdo_read(0x606C, 0x00, signed=True)
+    finally:
+        if enable_command_sent:
+            client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.ENABLE_OPERATION)))
+            sleep(_stop_wait_seconds(abs(target_rpm), decel_rpm_s))
+            after_zero_speed = _read_status_or_unknown(client)
+            client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.DISABLE_OPERATION)))
+            sleep(0.1)
+            after_disable = _read_status_or_unknown(client)
+            client.send_message(_zero_speed_frame(client.node_id, int(ControlWord.SHUTDOWN)))
+            sleep(0.1)
+            after_final_shutdown = _read_status_or_unknown(client)
+
+    return SpeedTestResult(
+        prepared=prepared,
+        target_rpm=target_rpm,
+        target_velocity_pulse_s=target_command.target_velocity_pulse_s,
+        duration_s=duration_s,
+        safety_limit_rpm=safety_limit,
+        after_enable=after_enable,
+        during_run=during_run,
+        actual_velocity_pulse_s=actual_velocity,
+        actual_velocity_rpm=actual_velocity * 60 / pulses_per_rev,
+        after_zero_speed=after_zero_speed,
+        after_disable=after_disable,
+        after_final_shutdown=after_final_shutdown,
+    )
+
+
 def enable_control_sequence() -> tuple[int, int, int]:
     return (
         int(ControlWord.SHUTDOWN),
@@ -232,3 +333,16 @@ def disable_control_sequence() -> tuple[int, int]:
 
 def _zero_speed_frame(node_id: int, control_word: int) -> CanMessage:
     return encode_rpdo1_control_velocity(node_id, control_word, 0)
+
+
+def _stop_wait_seconds(target_rpm: float, decel_rpm_s: int) -> float:
+    if decel_rpm_s <= 0:
+        return 0.5
+    return min(2.0, max(0.2, target_rpm / decel_rpm_s + 0.2))
+
+
+def _read_status_or_unknown(client: CanopenClient) -> StatusWord:
+    try:
+        return StatusWord(client.sdo_read(0x6041, 0x00))
+    except Exception:
+        return StatusWord(0)

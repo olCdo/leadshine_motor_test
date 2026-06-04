@@ -166,3 +166,72 @@ actual_velocity_rpm=...
 ```
 
 `bus_voltage_raw`、`current_actual_value_raw`、`torque_actual_value_raw`、`temperature_raw` 是可选读取项；如果驱动器不支持对应对象，会显示 `unavailable` 和对应的 `SDO abort` 信息。
+
+## Orange Pi 周期状态读取
+
+`--watch` 会周期读取状态和 telemetry，不写 `6040 control word`，不使能，不运动。
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --watch --watch-period 1 --watch-samples 5 --interface can0 --node-id 1
+```
+
+如需保存 `CSV`：
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --watch --watch-period 1 --watch-samples 10 --csv-log --interface can0 --node-id 1
+```
+
+## Orange Pi 首次低速运动测试
+
+这个测试会使能驱动器，并发送非零 `60FF target velocity`，电机会运动。当前阶段额外限制为不超过 50 rpm，运行指定时间后会自动发 0 rpm、断使能。
+
+测试前必须确认：
+
+- 电机固定。
+- 机械负载安全。
+- 急停或断电方式可用。
+- 人手和工具远离旋转部件。
+
+建议第一次只测 10 rpm、2 秒：
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --speed-test-rpm 10 --speed-test-duration 2 --interface can0 --node-id 1
+```
+
+通过时会看到：
+
+```text
+result=ok
+after_enable=0x....:operation_enabled
+during_run=0x....:operation_enabled
+actual_velocity_rpm=...
+after_final_shutdown=0x....
+```
+
+如果方向不对，可先用负速度低速验证：
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --speed-test-rpm -10 --speed-test-duration 2 --interface can0 --node-id 1
+```
+
+## Orange Pi 交互式控制
+
+`--interactive` 会进入交互式控制 shell。输入 `speed <rpm>` 后电机会按目标速度运行；退出、`Ctrl+C` 或异常时程序会执行 `stop` + `disable`。
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --interactive --max-rpm 50 --interface can0 --node-id 1
+```
+
+常用命令：
+
+```text
+enable
+speed 10
+status
+watch 5 1
+stop
+disable
+quit
+```
+
+首次交互测试建议把 `--max-rpm` 保持在 50 或更低。
