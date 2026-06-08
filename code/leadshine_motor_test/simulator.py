@@ -42,6 +42,8 @@ class SimulatedCanBus:
     def recv(self, timeout: float | None = None) -> CanMessage | None:
         if self._responses:
             return self._responses.popleft()
+        if self._nmt_operational:
+            return self._make_tpdo1()
         return None
 
     def shutdown(self) -> None:
@@ -149,6 +151,13 @@ class SimulatedCanBus:
 
     def _get(self, index: int, subindex: int) -> int:
         return self._objects[(index, subindex)].value
+
+    def _make_tpdo1(self) -> CanMessage:
+        status_word = self._get(0x6041, 0x00)
+        actual_velocity = self._get(0x606C, 0x00)
+        data = status_word.to_bytes(2, byteorder="little", signed=False)
+        data += actual_velocity.to_bytes(4, byteorder="little", signed=True)
+        return CanMessage(arbitration_id=0x180 + self.node_id, data=data)
 
 
 def _is_signed_object(index: int) -> bool:

@@ -31,6 +31,7 @@ from .drive import (
     run_limited_speed_test,
     run_zero_speed_enable_test,
 )
+from .monitor import TpdoStatusSample, read_tpdo1_status_sample
 from .pdo import (
     RPDO1_CONTROL_WORD_TARGET_VELOCITY,
     TPDO1_STATUS_WORD_ACTUAL_VELOCITY,
@@ -148,6 +149,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--watch-period", type=float, default=1.0, help="Watch interval in seconds, default: 1.0")
     parser.add_argument("--watch-samples", type=int, default=0, help="Watch sample count, 0 means until Ctrl+C")
     parser.add_argument("--csv-log", action="store_true", help="Write watch samples to CSV under --log-dir")
+    parser.add_argument(
+        "--watch-pdo",
+        action="store_true",
+        help="Configure velocity PDOs, then watch TPDO1 status/actual velocity. Does not enable or move the motor.",
+    )
     return parser
 
 
@@ -217,6 +223,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.watch:
         return _run_watch(config, args.watch_period, args.watch_samples, args.csv_log, simulate=args.simulate)
+
+    if args.watch_pdo:
+        return _run_watch_pdo(config, args.watch_period, args.watch_samples, simulate=args.simulate)
 
     parser.print_help()
     return 0
@@ -625,6 +634,73 @@ def _run_watch(
     return 0
 
 
+def _run_watch_pdo(
+    config: AppConfig,
+    period_s: float,
+    samples: int,
+    simulate: bool = False,
+) -> int:
+    if period_s < 0:
+        print("result=error")
+        print("error=watch_period must be >= 0")
+        return 2
+    if samples < 0:
+        print("result=error")
+        print("error=watch_samples must be >= 0")
+        return 2
+
+    _print_bus_opening(config, simulate)
+    print("test_type=tpdo_watch")
+    print("motor_motion=no")
+    print("writes_control_word=no")
+    print("action=configure velocity PDOs and read TPDO1 status/actual velocity")
+    print(f"watch_samples={samples}")
+    try:
+        with _open_bus(config, simulate) as bus:
+            client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
+            prepared = prepare_velocity_mode(
+                client,
+                accel_rpm_s=config.accel_rpm_s,
+                decel_rpm_s=config.decel_rpm_s,
+                pulses_per_rev=config.pulses_per_rev,
+            )
+            print("result=ready" if prepared.display_matches else "result=warning")
+            print(f"mode_display={prepared.mode_display}")
+            if not prepared.display_matches:
+                return 2
+            count = 0
+            while samples == 0 or count < samples:
+                sample = read_tpdo1_status_sample(
+                    bus,
+                    node_id=config.node_id,
+                    pulses_per_rev=config.pulses_per_rev,
+                    timeout=config.timeout,
+                )
+                count += 1
+                print(_tpdo_summary(count, sample))
+                if samples == 0 or count < samples:
+                    sleep(period_s)
+    except KeyboardInterrupt:
+        print()
+        print("result=interrupted")
+        return 0
+    except (TimeoutError, SdoTimeoutError, SdoAbortError) as exc:
+        print("result=canopen_error")
+        print(f"error={exc}")
+        return 2
+    except SocketCanError as exc:
+        print("result=socketcan_error")
+        print(f"error={exc}")
+        return 2
+    except Exception as exc:
+        print("result=error")
+        print(f"error={exc}")
+        return 2
+
+    print("result=ok")
+    return 0
+
+
 def _handle_interactive_command(controller: MotorController, line: str) -> bool:
     parts = line.split()
     command = parts[0].lower()
@@ -723,6 +799,15 @@ def _snapshot_summary(index: int, snapshot: DriveStatusSnapshot) -> str:
         f"sample={index} status_word=0x{snapshot.status_word.raw:04X} "
         f"state={snapshot.status_word.state_label()} enabled={_bool_text(snapshot.status_word.operation_enabled)} "
         f"rpm={rpm} bus_voltage_raw={voltage} current_raw={current} torque_raw={torque} temperature_raw={temp}"
+    )
+
+
+def _tpdo_summary(index: int, sample: TpdoStatusSample) -> str:
+    return (
+        f"sample={index} status_word=0x{sample.status_word.raw:04X} "
+        f"state={sample.status_word.state_label()} enabled={_bool_text(sample.status_word.operation_enabled)} "
+        f"actual_velocity_pulse_s={sample.actual_velocity_pulse_s} "
+        f"actual_velocity_rpm={sample.actual_velocity_rpm:.3f}"
     )
 
 

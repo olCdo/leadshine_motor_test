@@ -263,3 +263,20 @@ PYTHONPATH=code python3 -m leadshine_motor_test --interactive --max-rpm 50 --sim
 ```bash
 PYTHONPATH=code python3 -m leadshine_motor_test --watch --watch-samples 3 --watch-period 0.1 --csv-log --simulate --node-id 1
 ```
+
+## TPDO1 反馈监听
+
+`--watch-pdo` 会临时配置速度测试用的 `RPDO1/TPDO1 mapping`，设置 `Profile Velocity Mode`，然后监听 `TPDO1` 中的 `6041 status word` 和 `606C actual velocity`。
+它不写 `6040 control word`，不使能，不运动。
+
+本地模拟验证：
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --watch-pdo --watch-samples 3 --watch-period 0.1 --simulate --node-id 1
+```
+
+Orange Pi 上后续可用同样命令去掉 `--simulate`：
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --watch-pdo --watch-samples 3 --watch-period 0.1 --interface can0 --node-id 1
+```
