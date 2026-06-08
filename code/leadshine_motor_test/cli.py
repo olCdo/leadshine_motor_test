@@ -40,6 +40,7 @@ from .pdo import (
     pulse_per_second_to_rpm,
     rpm_to_pulse_per_second,
 )
+from .simulator import SimulatedCanBus
 from .socketcan import SocketCanBus, SocketCanError
 from .telemetry import DriveStatusSnapshot, TelemetryValue, read_drive_status
 
@@ -77,6 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--log-dir", default=AppConfig.log_dir, help="CSV log directory, default: logs")
     parser.add_argument("--timeout", type=float, default=AppConfig.timeout, help="SDO timeout in seconds, default: 1.0")
+    parser.add_argument("--simulate", action="store_true", help="Use local simulated CANopen drive instead of SocketCAN.")
     parser.add_argument(
         "--show-config",
         action="store_true",
@@ -180,36 +182,41 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.check_canopen_comm:
-        return _run_canopen_comm_check(config)
+        return _run_canopen_comm_check(config, simulate=args.simulate)
 
     if args.check_pdo_codecs:
         _run_pdo_codec_check(config)
         return 0
 
     if args.configure_pdo_mapping:
-        return _run_pdo_mapping_config(config)
+        return _run_pdo_mapping_config(config, simulate=args.simulate)
 
     if args.check_drive_codecs:
         _run_drive_codec_check(config)
         return 0
 
     if args.prepare_velocity_mode:
-        return _run_prepare_velocity_mode(config)
+        return _run_prepare_velocity_mode(config, simulate=args.simulate)
 
     if args.zero_speed_enable_test:
-        return _run_zero_speed_enable_test(config)
+        return _run_zero_speed_enable_test(config, simulate=args.simulate)
 
     if args.status:
-        return _run_status(config)
+        return _run_status(config, simulate=args.simulate)
 
     if args.speed_test_rpm is not None:
-        return _run_speed_test(config, target_rpm=args.speed_test_rpm, duration_s=args.speed_test_duration)
+        return _run_speed_test(
+            config,
+            target_rpm=args.speed_test_rpm,
+            duration_s=args.speed_test_duration,
+            simulate=args.simulate,
+        )
 
     if args.interactive:
-        return _run_interactive(config)
+        return _run_interactive(config, simulate=args.simulate)
 
     if args.watch:
-        return _run_watch(config, args.watch_period, args.watch_samples, args.csv_log)
+        return _run_watch(config, args.watch_period, args.watch_samples, args.csv_log, simulate=args.simulate)
 
     parser.print_help()
     return 0
@@ -231,13 +238,13 @@ def _run_canopen_codec_check(config: AppConfig) -> None:
     print(f"decoded_status_word=0x{decoded:04X}")
 
 
-def _run_canopen_comm_check(config: AppConfig) -> int:
-    print(f"opening_socketcan={config.interface}")
+def _run_canopen_comm_check(config: AppConfig, simulate: bool = False) -> int:
+    _print_bus_opening(config, simulate)
     print("test_type=communication")
     print("motor_motion=no")
     print("action=read 6041 status word via SDO")
     try:
-        with SocketCanBus(config.interface) as bus:
+        with _open_bus(config, simulate) as bus:
             client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
             status_word = client.sdo_read(0x6041, 0)
     except SdoTimeoutError as exc:
@@ -284,15 +291,15 @@ def _run_pdo_codec_check(config: AppConfig) -> None:
     print(f"decoded_actual_velocity_rpm={actual_rpm:.3f}")
 
 
-def _run_pdo_mapping_config(config: AppConfig) -> int:
-    print(f"opening_socketcan={config.interface}")
+def _run_pdo_mapping_config(config: AppConfig, simulate: bool = False) -> int:
+    _print_bus_opening(config, simulate)
     print("test_type=communication")
     print("motor_motion=no")
     print("action=configure temporary RPDO1/TPDO1 mapping via SDO")
     print("writes_control_word=no")
     print("stores_parameters=no")
     try:
-        with SocketCanBus(config.interface) as bus:
+        with _open_bus(config, simulate) as bus:
             client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
             result = configure_velocity_pdos(client)
     except SdoTimeoutError as exc:
@@ -337,8 +344,8 @@ def _run_drive_codec_check(config: AppConfig) -> None:
     print(f"rpdo1={command.frame.arbitration_id:03X}:{command.frame.data.hex()}")
 
 
-def _run_prepare_velocity_mode(config: AppConfig) -> int:
-    print(f"opening_socketcan={config.interface}")
+def _run_prepare_velocity_mode(config: AppConfig, simulate: bool = False) -> int:
+    _print_bus_opening(config, simulate)
     print("test_type=communication")
     print("motor_motion=no")
     print("action=prepare Profile Velocity Mode via SDO")
@@ -346,7 +353,7 @@ def _run_prepare_velocity_mode(config: AppConfig) -> int:
     print("target_velocity=0")
     print("stores_parameters=no")
     try:
-        with SocketCanBus(config.interface) as bus:
+        with _open_bus(config, simulate) as bus:
             client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
             result = prepare_velocity_mode(
                 client,
@@ -377,15 +384,15 @@ def _run_prepare_velocity_mode(config: AppConfig) -> int:
     return 0
 
 
-def _run_zero_speed_enable_test(config: AppConfig) -> int:
-    print(f"opening_socketcan={config.interface}")
+def _run_zero_speed_enable_test(config: AppConfig, simulate: bool = False) -> int:
+    _print_bus_opening(config, simulate)
     print("test_type=enable")
     print("motor_motion=not_commanded")
     print("action=enable briefly with RPDO target velocity 0, then disable")
     print("target_velocity=0")
     print("stores_parameters=no")
     try:
-        with SocketCanBus(config.interface) as bus:
+        with _open_bus(config, simulate) as bus:
             client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
             result = run_zero_speed_enable_test(
                 client,
@@ -416,8 +423,13 @@ def _run_zero_speed_enable_test(config: AppConfig) -> int:
     return 0
 
 
-def _run_speed_test(config: AppConfig, target_rpm: float, duration_s: float) -> int:
-    print(f"opening_socketcan={config.interface}")
+def _run_speed_test(
+    config: AppConfig,
+    target_rpm: float,
+    duration_s: float,
+    simulate: bool = False,
+) -> int:
+    _print_bus_opening(config, simulate)
     print("test_type=motion")
     print("motor_motion=yes")
     print("action=run one bounded Profile Velocity Mode speed test, then stop and disable")
@@ -426,7 +438,7 @@ def _run_speed_test(config: AppConfig, target_rpm: float, duration_s: float) -> 
     print(f"safety_limit_rpm={min(config.max_rpm, FIRST_MOTION_TEST_LIMIT_RPM)}")
     print("stores_parameters=no")
     try:
-        with SocketCanBus(config.interface) as bus:
+        with _open_bus(config, simulate) as bus:
             client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
             result = run_limited_speed_test(
                 client,
@@ -463,14 +475,14 @@ def _run_speed_test(config: AppConfig, target_rpm: float, duration_s: float) -> 
     return 0
 
 
-def _run_status(config: AppConfig) -> int:
-    print(f"opening_socketcan={config.interface}")
+def _run_status(config: AppConfig, simulate: bool = False) -> int:
+    _print_bus_opening(config, simulate)
     print("test_type=communication")
     print("motor_motion=no")
     print("action=read drive status and telemetry via SDO")
     print("writes_control_word=no")
     try:
-        with SocketCanBus(config.interface) as bus:
+        with _open_bus(config, simulate) as bus:
             client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
             snapshot = read_drive_status(client, pulses_per_rev=config.pulses_per_rev)
     except SdoTimeoutError as exc:
@@ -491,8 +503,8 @@ def _run_status(config: AppConfig) -> int:
     return 0
 
 
-def _run_interactive(config: AppConfig) -> int:
-    print(f"opening_socketcan={config.interface}")
+def _run_interactive(config: AppConfig, simulate: bool = False) -> int:
+    _print_bus_opening(config, simulate)
     print("test_type=interactive_motion_control")
     print("motor_motion=commanded_by_speed")
     print(f"max_rpm={config.max_rpm}")
@@ -500,7 +512,7 @@ def _run_interactive(config: AppConfig) -> int:
     print("commands=enable,disable,speed <rpm>,stop,status,watch [samples] [period],help,quit")
     controller: MotorController | None = None
     try:
-        with SocketCanBus(config.interface) as bus:
+        with _open_bus(config, simulate) as bus:
             client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
             controller = MotorController(
                 client,
@@ -543,7 +555,13 @@ def _run_interactive(config: AppConfig) -> int:
     return 0
 
 
-def _run_watch(config: AppConfig, period_s: float, samples: int, csv_log: bool) -> int:
+def _run_watch(
+    config: AppConfig,
+    period_s: float,
+    samples: int,
+    csv_log: bool,
+    simulate: bool = False,
+) -> int:
     if period_s <= 0:
         print("result=error")
         print("error=watch_period must be positive")
@@ -563,7 +581,7 @@ def _run_watch(config: AppConfig, period_s: float, samples: int, csv_log: bool) 
             writer = csv.DictWriter(csv_file, fieldnames=_csv_fieldnames())
             writer.writeheader()
 
-        print(f"opening_socketcan={config.interface}")
+        _print_bus_opening(config, simulate)
         print("test_type=watch")
         print("motor_motion=no")
         print("writes_control_word=no")
@@ -571,7 +589,7 @@ def _run_watch(config: AppConfig, period_s: float, samples: int, csv_log: bool) 
         print(f"watch_samples={samples}")
         if csv_path is not None:
             print(f"csv_path={csv_path}")
-        with SocketCanBus(config.interface) as bus:
+        with _open_bus(config, simulate) as bus:
             client = CanopenClient(bus, node_id=config.node_id, timeout=config.timeout)
             count = 0
             while samples == 0 or count < samples:
@@ -755,3 +773,17 @@ def _snapshot_row(snapshot: DriveStatusSnapshot) -> dict[str, object]:
 
 def _csv_value(telemetry: TelemetryValue) -> str | int:
     return "" if telemetry.value is None else telemetry.value
+
+
+def _open_bus(config: AppConfig, simulate: bool):
+    if simulate:
+        return SimulatedCanBus(node_id=config.node_id, pulses_per_rev=config.pulses_per_rev)
+    return SocketCanBus(config.interface)
+
+
+def _print_bus_opening(config: AppConfig, simulate: bool) -> None:
+    if simulate:
+        print("opening_simulated_canopen=yes")
+        print(f"simulated_node_id={config.node_id}")
+        return
+    print(f"opening_socketcan={config.interface}")

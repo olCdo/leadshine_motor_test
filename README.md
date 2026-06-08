@@ -235,3 +235,31 @@ quit
 ```
 
 首次交互测试建议把 `--max-rpm` 保持在 50 或更低。
+
+## 本地模拟测试
+
+没有 Orange Pi 或 CAN 硬件时，可以加 `--simulate` 使用本地模拟驱动器。模拟器会响应 `SDO`、`RPDO1`、`6041 status word` 和 `606C actual velocity`，用于验证程序流程，不代表真实硬件结果。
+
+模拟状态读取：
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --status --simulate --node-id 1
+```
+
+模拟低速运动测试：
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --speed-test-rpm 10 --speed-test-duration 0.2 --simulate --node-id 1
+```
+
+模拟交互式控制：
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --interactive --max-rpm 50 --simulate --node-id 1
+```
+
+模拟周期读取并保存 `CSV`：
+
+```bash
+PYTHONPATH=code python3 -m leadshine_motor_test --watch --watch-samples 3 --watch-period 0.1 --csv-log --simulate --node-id 1
+```
